@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>QA PIPELINE MONITOR</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            border-radius: 0px !important;
+        }
+        body {
+            background-color: #000000;
+            color: #ffffff;
+            font-family: 'Courier New', Courier, monospace;
+            margin: 20px;
+            padding: 0;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1, h2 {
+            border-bottom: 2px solid #ffffff;
+            padding-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        /* Khung hiển thị trạng thái hệ thống */
+        .status-bar {
+            border: 2px dashed #ffffff;
+            padding: 15px;
+            margin-bottom: 25px;
+            font-weight: bold;
+            font-size: 1.1rem;
+            text-align: center;
+            letter-spacing: 1px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 30px;
+        }
+        .card {
+            border: 2px solid #ffffff;
+            padding: 15px;
+            text-align: center;
+            background: #000000;
+        }
+        .card .number {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .card.highlight {
+            border-width: 2px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            border: 2px solid #ffffff;
+        }
+        th, td {
+            border: 1px solid #ffffff;
+            padding: 12px;
+            text-align: left;
+            vertical-align: top;
+        }
+        th {
+            background-color: #000000;
+            color: #ffffff;
+            text-transform: uppercase;
+        }
+        .footer {
+            margin-top: 40px;
+            font-size: 0.8rem;
+            text-align: center;
+            border-top: 1px solid #ffffff;
+            padding-top: 10px;
+            color: #888;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>QA Pipeline Realtime Monitor</h1>
+        
+        <div class="status-bar" id="system-status-text">
+            CHECKING AI SYSTEM STATUS...
+        </div>
+        
+        <div class="grid">
+            <div class="card highlight">
+                <div>SELECTED (TARGET)</div>
+                <div class="number" id="count-selected">0</div>
+            </div>
+            <div class="card">
+                <div>DUPLICATE</div>
+                <div class="number" id="count-duplicate">0</div>
+            </div>
+            <div class="card">
+                <div>BAD RULE</div>
+                <div class="number" id="count-bad-rule">0</div>
+            </div>
+            <div class="card">
+                <div>INVALID JSON</div>
+                <div class="number" id="count-invalid-json">0</div>
+            </div>
+            <div class="card">
+                <div>TOTAL ATTEMPTS</div>
+                <div class="number" id="count-total">0</div>
+            </div>
+        </div>
+
+        <h2>Recently Selected Samples</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 15%">Time</th>
+                    <th style="width: 40%">User Prompt</th>
+                    <th style="width: 45%">Assistant Response</th>
+                </tr>
+            </thead>
+            <tbody id="recent-table-body">
+                <tr>
+                    <td colspan="3" style="text-align: center;">Loading data...</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <h2>Recently Duplicate Samples</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th style="width: 12%">Time</th>
+                    <th style="width: 22%">Incoming User</th>
+                    <th style="width: 22%">Incoming Assistant</th>
+                    <th style="width: 8%">Nearest ID</th>
+                    <th style="width: 18%">Nearest User</th>
+                    <th style="width: 18%">Nearest Assistant</th>
+                </tr>
+            </thead>
+            <tbody id="duplicate-table-body">
+                <tr>
+                    <td colspan="6" style="text-align: center;">Loading data...</td>
+                </tr>
+            </tbody>
+        </table>
+        
+        <div class="footer">
+            QA-ChromaDB Pipeline Dashboard Terminal Style
+        </div>
+    </div>
+
+    <script>
+        async function updateStats() {
+            try {
+                const response = await fetch('/api/stats');
+                const data = await response.json();
+                
+                // Cập nhật dòng trạng thái hệ thống AI
+                document.getElementById('system-status-text').innerText = "SYSTEM: " + data.system_status;
+                
+                // Cập nhật số lượng counter
+                document.getElementById('count-selected').innerText = data.selected;
+                document.getElementById('count-duplicate').innerText = data.duplicate;
+                document.getElementById('count-bad-rule').innerText = data.bad_rule;
+                document.getElementById('count-invalid-json').innerText = data.invalid_json;
+                document.getElementById('count-total').innerText = data.total;
+                
+                // Cập nhật bảng mẫu
+                const tbody = document.getElementById('recent-table-body');
+                if (data.recent.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="3" style="text-align: center;">No data has been selected successfully yet.</td></tr>';
+                } else {
+                    tbody.innerHTML = data.recent.map(row => `
+                        <tr>
+                            <td>${row.time.replace('T', ' ')}</td>
+                            <td>${escapeHtml(row.user)}</td>
+                            <td>${escapeHtml(row.assistant)}</td>
+                        </tr>
+                    `).join('');
+                }
+
+                const dupBody = document.getElementById('duplicate-table-body');
+                if (!data.recent_duplicates || data.recent_duplicates.length === 0) {
+                    dupBody.innerHTML = '<tr><td colspan="6" style="text-align: center;">No duplicate samples yet.</td></tr>';
+                } else {
+                    dupBody.innerHTML = data.recent_duplicates.map(row => `
+                        <tr>
+                            <td>${row.time.replace('T', ' ')}</td>
+                            <td>${escapeHtml(row.user)}</td>
+                            <td>${escapeHtml(row.assistant)}</td>
+                            <td>${row.nearest_selected_id ?? '-'}</td>
+                            <td>${escapeHtml(row.nearest_user || '')}</td>
+                            <td>${escapeHtml(row.nearest_assistant || '')}</td>
+                        </tr>
+                    `).join('');
+                }
+            } catch (error) {
+                console.error("Dashboard update failed:", error);
+                document.getElementById('system-status-text').innerText = "SYSTEM: BACKEND CONNECTION ERROR";
+            }
+        }
+
+        function escapeHtml(text) {
+            if (!text) return "";
+            return text
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        updateStats();
+        setInterval(updateStats, 2000);
+    </script>
+</body>
+</html>

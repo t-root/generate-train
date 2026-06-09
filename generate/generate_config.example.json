@@ -1,0 +1,24 @@
+{
+  "inference_mode": "api",
+  "api": {
+    "url": "https://openrouter.ai/api/v1/chat/completions",
+    "key": "sk-or-v1-YOUR_KEY_HERE",
+    "model": "qwen/qwen3-vl-30b-a3b-instruct",
+    "timeout_seconds": 120,
+    "reasoning_effort": "none",
+    "reasoning_exclude": true
+  },
+  "local": {
+    "model": "qwen/qwen3-vl-30b-a3b-instruct"
+  },
+  "common": {
+    "embed_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "target_count": 100,
+    "max_attempts": 5000,
+    "max_tokens": 2048,
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "vector_sim_threshold": 0.999999,
+    "chroma_collection": "qa_samples"
+  }
+}

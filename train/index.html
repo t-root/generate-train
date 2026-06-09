@@ -1,0 +1,286 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Training Monitor</title>
+    <style>
+        * { box-sizing: border-box; border-radius: 0 !important; }
+        body {
+            margin: 0;
+            padding: 24px;
+            background: #000;
+            color: #fff;
+            font-family: "Segoe UI", system-ui, sans-serif;
+        }
+        .container { max-width: 980px; margin: 0 auto; }
+        h1 {
+            margin: 0 0 18px;
+            font-size: 28px;
+            border-bottom: 1px solid #fff;
+            padding-bottom: 10px;
+        }
+        .card {
+            border: 1px solid #fff;
+            background: #000;
+            padding: 16px;
+            margin-bottom: 12px;
+        }
+        .label {
+            color: #aaa;
+            font-size: 13px;
+            text-transform: uppercase;
+        }
+        .value { font-size: 20px; margin-top: 6px; word-break: break-word; }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        .progress-wrap {
+            border: 1px solid #fff;
+            background: #000;
+            height: 24px;
+            margin-top: 10px;
+        }
+        .bar {
+            height: 100%;
+            width: 0%;
+            background: #fff;
+            transition: width 0.35s ease;
+        }
+        .bar.pulse {
+            animation: pulse-bar 1.5s ease-in-out infinite;
+        }
+        @keyframes pulse-bar {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.55; }
+        }
+        .alive {
+            display: none;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 14px;
+            border: 1px solid #fff;
+            margin-bottom: 12px;
+            font-size: 15px;
+        }
+        .alive.show { display: flex; }
+        .dot {
+            width: 12px;
+            height: 12px;
+            background: #fff;
+            flex-shrink: 0;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink { 50% { opacity: 0.2; } }
+        .steps {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin: 14px 0 4px;
+        }
+        .step {
+            flex: 1 1 140px;
+            min-width: 120px;
+            border: 1px solid #444;
+            padding: 10px 8px;
+            font-size: 12px;
+            text-align: center;
+            color: #666;
+        }
+        .step .num { font-size: 18px; font-weight: 700; display: block; margin-bottom: 4px; }
+        .step.done { border-color: #fff; color: #fff; }
+        .step.active {
+            border-color: #fff;
+            color: #000;
+            background: #fff;
+        }
+        .step.warn { border-color: #fff; color: #fff; }
+        .meta-line {
+            font-size: 14px;
+            opacity: 0.9;
+            margin-top: 8px;
+        }
+        .hint {
+            font-size: 14px;
+            line-height: 1.5;
+            opacity: 0.9;
+            margin-top: 8px;
+            padding: 12px;
+            border: 1px dashed #555;
+        }
+        .hint.error { border-color: #fff; }
+        @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Train Progress Dashboard</h1>
+
+        <div class="alive" id="alive">
+            <span class="dot"></span>
+            <span id="aliveText">Đang chạy — không tắt terminal</span>
+        </div>
+
+        <div class="card">
+            <div class="label">Tiến trình tổng (5 bước)</div>
+            <div class="steps" id="steps"></div>
+            <div class="meta-line" id="phaseLine">Bước — / 5</div>
+
+            <div class="label" style="margin-top:14px;">Status</div>
+            <div class="value" id="status">IDLE</div>
+            <div class="label" style="margin-top:10px;">Stage</div>
+            <div class="value" id="stage">Waiting to start</div>
+            <div class="progress-wrap">
+                <div class="bar" id="bar"></div>
+            </div>
+            <div class="label" id="percent" style="margin-top:8px;">0.00%</div>
+            <div class="meta-line" id="elapsed"></div>
+        </div>
+
+        <div class="card">
+            <div class="label">Chi tiết</div>
+            <div class="value" id="message" style="font-size:16px;">-</div>
+        </div>
+
+        <div class="grid">
+            <div class="card">
+                <div class="label">Epoch</div>
+                <div class="value" id="epoch">0 / 0</div>
+            </div>
+            <div class="card">
+                <div class="label">Global Step</div>
+                <div class="value" id="stepNum">0</div>
+            </div>
+            <div class="card">
+                <div class="label">Dataset Rows</div>
+                <div class="value" id="rows">0</div>
+            </div>
+            <div class="card">
+                <div class="label">Device</div>
+                <div class="value" id="device">-</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <div class="label">Output Directory</div>
+            <div class="value" id="output">-</div>
+        </div>
+
+        <div class="hint" id="hint"></div>
+    </div>
+
+    <script>
+        const STEP_NAMES = [
+            "Dữ liệu",
+            "Tokenizer",
+            "Model",
+            "LoRA",
+            "Train",
+        ];
+
+        function formatElapsed(sec) {
+            const s = Math.max(0, sec || 0);
+            const m = Math.floor(s / 60);
+            const r = s % 60;
+            return m > 0 ? `${m} phút ${r} giây` : `${r} giây`;
+        }
+
+        function renderSteps(currentStep, status) {
+            const el = document.getElementById("steps");
+            el.innerHTML = STEP_NAMES.map((name, i) => {
+                const n = i + 1;
+                let cls = "step";
+                if (status === "DONE") cls += " done";
+                else if (n < currentStep) cls += " done";
+                else if (n === currentStep) cls += " active";
+                return `<div class="${cls}"><span class="num">${n}</span>${name}</div>`;
+            }).join("");
+        }
+
+        async function refresh() {
+            try {
+                const response = await fetch("/api/stats");
+                const data = await response.json();
+
+                const step = data.step || 0;
+                const stepTotal = data.step_total || 5;
+                const status = data.status || "IDLE";
+                const percent = Math.max(0, Math.min(100, data.progress_percent || 0));
+                const elapsed = data.elapsed_sec || 0;
+
+                document.getElementById("status").textContent = status;
+                document.getElementById("stage").textContent = data.stage || "-";
+                document.getElementById("epoch").textContent =
+                    `${(data.current_epoch || 0).toFixed(2)} / ${(data.total_epochs || 0).toFixed(2)}`;
+                document.getElementById("stepNum").textContent = data.global_step ?? 0;
+                document.getElementById("rows").textContent = data.dataset_rows ?? 0;
+                document.getElementById("message").textContent = data.message || "-";
+                document.getElementById("output").textContent = data.output_dir || "-";
+                document.getElementById("device").textContent = data.device || "-";
+
+                document.getElementById("bar").style.width = `${percent}%`;
+                document.getElementById("percent").textContent = `${percent.toFixed(2)}%`;
+
+                const bar = document.getElementById("bar");
+                const isPrep = status === "RUNNING" && step >= 1 && step <= 3;
+                bar.classList.toggle("pulse", isPrep);
+
+                const alive = document.getElementById("alive");
+                const showAlive = status === "RUNNING" || status === "SAVING";
+                alive.classList.toggle("show", showAlive);
+                document.getElementById("aliveText").textContent =
+                    status === "SAVING"
+                        ? "Đang lưu model — không tắt terminal"
+                        : "Đang chạy — không tắt terminal (F5 trang web được)";
+
+                renderSteps(step, status);
+
+                const stepLabel = data.step_label || "";
+                document.getElementById("phaseLine").textContent =
+                    step > 0
+                        ? `Bước ${step}/${stepTotal}: ${stepLabel}`
+                        : "Chưa bắt đầu";
+
+                const elapsedEl = document.getElementById("elapsed");
+                if (showAlive && elapsed > 0) {
+                    elapsedEl.textContent =
+                        `Thời gian bước hiện tại: ${formatElapsed(elapsed)} — vẫn đang xử lý, không phải treo.`;
+                } else if (status === "DONE") {
+                    elapsedEl.textContent = "Hoàn tất.";
+                } else {
+                    elapsedEl.textContent = "";
+                }
+
+                const hint = document.getElementById("hint");
+                hint.classList.remove("error");
+                if (status === "ERROR") {
+                    hint.classList.add("error");
+                    hint.textContent = data.message || "Lỗi — xem terminal.";
+                } else if (step === 3 && status === "RUNNING") {
+                    hint.textContent =
+                        "Bước 3 thường lâu nhất: terminal hiện «Loading checkpoint shards 1/2, 2/2». " +
+                        "Trên CPU có thể ~6 phút/shard. Web cập nhật mỗi 2 giây; số giây ở trên sẽ tăng.";
+                } else if ((data.device || "").toLowerCase().includes("cpu")) {
+                    hint.textContent =
+                        "Đang dùng CPU — rất chậm. Nên cài PyTorch CUDA nếu có card NVIDIA.";
+                } else if (status === "RUNNING" && step === 5) {
+                    hint.textContent = "Đang fine-tune — thanh % phản ánh tiến độ train.";
+                } else if (status === "RUNNING") {
+                    hint.textContent = "Chuẩn bị train — đợi đến bước 5 để % tăng theo epoch/step.";
+                } else {
+                    hint.textContent = "";
+                }
+            } catch (e) {
+                document.getElementById("message").textContent = "Không kết nối được backend train";
+                document.getElementById("hint").textContent =
+                    "Train có đang chạy không? Mở đúng http://127.0.0.1:5001";
+            }
+        }
+
+        refresh();
+        setInterval(refresh, 1500);
+    </script>
+</body>
+</html>

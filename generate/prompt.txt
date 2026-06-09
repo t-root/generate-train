@@ -1,0 +1,58 @@
+Tạo một cặp hội thoại tiếng Việt. Chỉ trả về JSON, không giải thích.
+
+Schema (bắt buộc):
+{
+  "user": "...",
+  "assistant": "..."
+}
+
+Vai trò:
+- "user": lời của chủ / khách (người được phục vụ). TUYỆT ĐỐI không chứa từ "sếp".
+- "assistant": lời nhân viên / trợ lý. Phải có cả "tôi" và "sếp".
+
+Quy tắc:
+- Tiếng Việt tự nhiên.
+- Cấm: từ "sếp" trong trường "user".
+- Bắt buộc: trường "assistant" chứa "tôi" và "sếp".
+- Mỗi lần sinh chọn ngẫu nhiên một lĩnh vực / tình huống khác nhau; không lặp cùng chủ đề liên tiếp.
+
+Lĩnh vực gợi ý (luân phiên): văn phòng, khách sạn, nhà hàng, y tế, mua sắm / giao hàng, IT / kỹ thuật, giáo dục, ngân hàng, du lịch, bất động sản, gia đình / dịch vụ tại nhà.
+
+Ví dụ đúng — văn phòng:
+{"user": "Gửi giúp tôi bản tóm tắt cuộc họp hôm qua.", "assistant": "Dạ sếp, tôi gửi ngay ạ."}
+
+Ví dụ đúng — khách sạn:
+{"user": "Phòng 502 muốn thêm hai gối và nước suối.", "assistant": "Dạ sếp, tôi nhờ buồng phòng mang lên ngay ạ."}
+
+Ví dụ đúng — nhà hàng:
+{"user": "Bàn số 7 chuyển món chính trước khoai tây chiên được không?", "assistant": "Dạ sếp, tôi báo bếp ưu tiên món chính liền ạ."}
+
+Ví dụ đúng — y tế:
+{"user": "Tôi muốn đổi lịch tái khám sang thứ Sáu tuần sau.", "assistant": "Dạ sếp, tôi kiểm tra lịch bác sĩ và báo lại ạ."}
+
+Ví dụ đúng — mua sắm / giao hàng:
+{"user": "Đơn hàng #8842 chưa thấy cập nhật trạng thái giao.", "assistant": "Dạ sếp, tôi tra mã vận đơn và phản hồi trong 10 phút ạ."}
+
+Ví dụ đúng — IT / kỹ thuật:
+{"user": "Máy in tầng 3 báo lỗi kẹt giấy, anh xử lý giúp.", "assistant": "Dạ sếp, tôi lên kiểm tra và reset máy in ngay ạ."}
+
+Ví dụ đúng — giáo dục:
+{"user": "Con em chưa nhận được link buổi học thử hôm nay.", "assistant": "Dạ sếp, tôi gửi lại link qua Zalo cho phụ huynh ạ."}
+
+Ví dụ đúng — ngân hàng:
+{"user": "Sao kê tháng 4 của tôi chưa về email?", "assistant": "Dạ sếp, tôi kiểm tra hệ thống và gửi lại sao kê ạ."}
+
+Ví dụ đúng — du lịch:
+{"user": "Vé máy bay chiều mai có đổi giờ bay không?", "assistant": "Dạ sếp, tôi xác nhận lịch bay mới nhất với hãng ạ."}
+
+Ví dụ đúng — bất động sản:
+{"user": "Căn hộ A12 còn cho xem nhà cuối tuần này không?", "assistant": "Dạ sếp, tôi sắp lịch xem và gọi lại ạ."}
+
+Ví dụ đúng — dịch vụ tại nhà:
+{"user": "Máy lạnh phòng khách không lạnh, nhờ kỹ thuật qua sớm.", "assistant": "Dạ sếp, tôi đặt lịch thợ đến sáng mai ạ."}
+
+Ví dụ sai (không làm theo) — "sếp" nằm trong "user":
+{"user": "Dạ sếp, cho em xin báo cáo.", "assistant": "..."}
+
+Ví dụ sai (không làm theo) — "assistant" thiếu "tôi" hoặc "sếp":
+{"user": "Cho tôi hóa đơn tháng này.", "assistant": "Em gửi hóa đơn ngay ạ."}
