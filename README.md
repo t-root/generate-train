@@ -36,10 +36,9 @@ generate-train/
 python -m venv .venv
 .venv\Scripts\activate
 pip install -r requirements.txt
-copy generate\generate_config.example.json generate\generate_config.json
 ```
 
-Sau đó sửa `generate/generate_config.json` và điền API key của bạn.
+Tạo `generate/generate_config.json` (xem mẫu ở mục **Cấu hình generate** bên dưới) và điền API key của bạn.
 
 ## Cách chạy nhanh
 
@@ -118,6 +117,7 @@ Cấu trúc JSON:
   "common": {
     "embed_model": "sentence-transformers/...",
     "target_count": 100,
+    "samples_per_request": 1,
     "max_attempts": 5000,
     "max_tokens": 2048,
     "temperature": 0.8,
@@ -129,6 +129,12 @@ Cấu trúc JSON:
 ```
 
 **Lưu ý:** Tùy `inference_mode` là `"api"` hay `"local"`, chương trình sẽ dùng cấu hình tương ứng.
+
+| Trường | Ý nghĩa |
+|--------|---------|
+| `target_count` | Tổng số mẫu `selected` cần tích lũy trong ChromaDB |
+| `samples_per_request` | Số cặp QA mỗi lần gọi AI (mặc định `1`). Nếu > 1, model trả về mảng JSON; pipeline xử lý từng phần tử. Tăng `max_tokens` khi dùng giá trị lớn. |
+| `max_attempts` | Số lần gọi AI tối đa (mỗi lần có thể trả về `samples_per_request` mẫu) |
 
 ### Cấu hình train
 

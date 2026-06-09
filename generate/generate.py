@@ -62,6 +62,7 @@ PROMPT_PATH = os.path.join(_CONFIG_DIR, "prompt.txt")
 
 # Pipeline limits
 TARGET_COUNT = _common_config.get("target_count", 100)
+SAMPLES_PER_REQUEST = max(1, int(_common_config.get("samples_per_request", 1)))
 MAX_ATTEMPTS = _common_config.get("max_attempts", TARGET_COUNT * 50)
 MAX_TOKENS = _common_config.get("max_tokens", 2048)
 TEMPERATURE = _common_config.get("temperature", 0.8)
@@ -80,8 +81,7 @@ class ChatData(BaseModel):
     assistant: str
 
 
-def chat_json_schema() -> dict:
-    """JSON Schema for API structured output (same shape as local JsonSchemaParser)."""
+def _chat_item_json_schema() -> dict:
     schema = ChatData.model_json_schema()
     schema["additionalProperties"] = False
     if "properties" in schema:
@@ -89,6 +89,19 @@ def chat_json_schema() -> dict:
             if isinstance(prop, dict):
                 prop["additionalProperties"] = False
     return schema
+
+
+def chat_json_schema() -> dict:
+    """JSON Schema for API structured output (same shape as local JsonSchemaParser)."""
+    item_schema = _chat_item_json_schema()
+    if SAMPLES_PER_REQUEST <= 1:
+        return item_schema
+    return {
+        "type": "array",
+        "items": item_schema,
+        "minItems": SAMPLES_PER_REQUEST,
+        "maxItems": SAMPLES_PER_REQUEST,
+    }
 
 
 def api_response_format() -> dict:
@@ -141,6 +154,30 @@ def load_prompt() -> str:
         return f.read().rstrip("\n\r \t")
 
 
+def build_instruction() -> str:
+    instruction = load_prompt()
+    if SAMPLES_PER_REQUEST > 1:
+        instruction += (
+            f"\n\nYêu cầu bổ sung: trả về đúng {SAMPLES_PER_REQUEST} cặp hội thoại "
+            'trong một mảng JSON (array), mỗi phần tử là object có "user" và "assistant". '
+            "Các cặp phải khác chủ đề/tình huống nhau."
+        )
+    return instruction
+
+
+def split_raw_records(raw: str) -> list[str]:
+    """Turn one model response into per-sample JSON strings."""
+    if SAMPLES_PER_REQUEST <= 1:
+        return [raw]
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return [raw]
+    if not isinstance(data, list):
+        return [raw]
+    return [json.dumps(item, ensure_ascii=False) for item in data]
+
+
 def format_chat_prompt(tokenizer, instruction: str) -> str:
     """Wrap the full instruction in Qwen ChatML so the model sees all of it."""
     messages = [{"role": "user", "content": instruction}]
@@ -159,7 +196,7 @@ def build_generator():
     model = AutoModelForCausalLM.from_pretrained(MODEL_NAME, device_map="auto")
     pipe = pipeline("text-generation", model=model, tokenizer=tok)
 
-    parser = JsonSchemaParser(ChatData.model_json_schema())
+    parser = JsonSchemaParser(chat_json_schema())
     prefix_fn = build_transformers_prefix_allowed_tokens_fn(tok, parser)
     return pipe, prefix_fn, tok
 
@@ -247,7 +284,7 @@ def generate_with_api(prompt: str) -> str:
 
 
 def generate_record(gen, prefix_fn, tokenizer) -> str:
-    instruction = load_prompt()
+    instruction = build_instruction()
     if INFERENCE_MODE == "api":
         return generate_with_api(instruction)
 
@@ -331,11 +368,12 @@ def run_pipeline(target: int) -> None:
     try:
         emb_model = build_embedder()
         gen, prefix_fn, tokenizer = build_generator()
-        instruction = load_prompt()
+        instruction = build_instruction()
 
         ok = store.count_selected()
         tries = 0
         print(f"[START] target={target}, selected={ok}")
+        print(f"[BATCH] samples_per_request={SAMPLES_PER_REQUEST}")
         print(f"[MODE] Inference mode: {INFERENCE_MODE}")
         if INFERENCE_MODE == "api":
             print(f"[API] Model: {API_MODEL}, URL: {API_URL}")
@@ -348,49 +386,68 @@ def run_pipeline(target: int) -> None:
             tries += 1
 
             raw = generate_record(gen, prefix_fn, tokenizer)
+            record_raws = split_raw_records(raw)
 
-            valid, user_text, assistant_text, status, reason = validate_record(raw)
-            if not valid:
-                if status == "invalid_json":
-                    store.insert_sample(None, None, "invalid_json", raw, reason)
-                    print(f"[INVALID_JSON] Attempt {tries}: {reason}")
-                    if raw and len(raw) < 500:
-                        print(f"  Raw: {raw}")
-                else:
-                    store.insert_sample(user_text, assistant_text, "bad_rule", raw, reason)
-                    print(f"[BAD_RULE] Attempt {tries}: {reason}")
-                    if user_text:
-                        print(f"  User: {user_text[:100]}...")
-                    if assistant_text:
-                        print(f"  Assistant: {assistant_text[:100]}...")
+            if SAMPLES_PER_REQUEST > 1 and len(record_raws) != SAMPLES_PER_REQUEST:
+                store.insert_sample(
+                    None,
+                    None,
+                    "invalid_json",
+                    raw,
+                    f"expected {SAMPLES_PER_REQUEST} items, got {len(record_raws)}",
+                )
+                print(
+                    f"[INVALID_JSON] Attempt {tries}: "
+                    f"expected {SAMPLES_PER_REQUEST} items, got {len(record_raws)}"
+                )
                 continue
 
-            vec = pair_embedding(emb_model, user_text, assistant_text)
+            for item_raw in record_raws:
+                if ok >= target:
+                    break
 
-            dup, score, nearest_id = store.is_duplicate(vec)
-            if dup:
+                valid, user_text, assistant_text, status, reason = validate_record(item_raw)
+                if not valid:
+                    if status == "invalid_json":
+                        store.insert_sample(None, None, "invalid_json", item_raw, reason)
+                        print(f"[INVALID_JSON] Attempt {tries}: {reason}")
+                        if item_raw and len(item_raw) < 500:
+                            print(f"  Raw: {item_raw}")
+                    else:
+                        store.insert_sample(user_text, assistant_text, "bad_rule", item_raw, reason)
+                        print(f"[BAD_RULE] Attempt {tries}: {reason}")
+                        if user_text:
+                            print(f"  User: {user_text[:100]}...")
+                        if assistant_text:
+                            print(f"  Assistant: {assistant_text[:100]}...")
+                    continue
+
+                vec = pair_embedding(emb_model, user_text, assistant_text)
+
+                dup, score, nearest_id = store.is_duplicate(vec)
+                if dup:
+                    store.insert_sample(
+                        user_text,
+                        assistant_text,
+                        "duplicate_context",
+                        item_raw,
+                        f"sim={score:.4f}",
+                        nearest_selected_id=nearest_id,
+                    )
+                    print(f"[DUPLICATE] Attempt {tries}: Similarity={score:.6f}, Nearest ID={nearest_id}")
+                    print(f"  User: {user_text[:100]}...")
+                    continue
+
                 store.insert_sample(
                     user_text,
                     assistant_text,
-                    "duplicate_context",
-                    raw,
-                    f"sim={score:.4f}",
-                    nearest_selected_id=nearest_id,
+                    "selected",
+                    item_raw,
+                    None,
+                    embedding=vec[0],
                 )
-                print(f"[DUPLICATE] Attempt {tries}: Similarity={score:.6f}, Nearest ID={nearest_id}")
-                print(f"  User: {user_text[:100]}...")
-                continue
-
-            store.insert_sample(
-                user_text,
-                assistant_text,
-                "selected",
-                raw,
-                None,
-                embedding=vec[0],
-            )
-            ok += 1
-            print(f"[OK] {ok}/{target} | User: {user_text[:80]}...")
+                ok += 1
+                print(f"[OK] {ok}/{target} | User: {user_text[:80]}...")
     finally:
         with _pipeline_lock:
             _pipeline_active = False
