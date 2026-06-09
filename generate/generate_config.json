@@ -1,0 +1,25 @@
+{
+  "inference_mode": "api",
+  "api": {
+    "url": "YOUR_API_URL",
+    "key": "YOUR_API_KEY",
+    "model": "YOUR_MODEL_NAME",
+    "timeout_seconds": 120,
+    "reasoning_effort": "none",
+    "reasoning_exclude": true
+  },
+  "local": {
+    "model": "YOUR_MODEL_NAME"
+  },
+  "common": {
+    "embed_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2",
+    "target_count": 100,
+    "samples_per_request": 1,
+    "max_attempts": 5000,
+    "max_tokens": 2048,
+    "temperature": 0.8,
+    "top_p": 0.95,
+    "vector_sim_threshold": 0.999999,
+    "chroma_collection": "qa_samples"
+  }
+}

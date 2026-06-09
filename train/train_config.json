@@ -1,5 +1,5 @@
 {
-  "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
+  "model_name": "YOUR_MODEL_NAME",
   "require_cuda": false,
   "epochs": 3,
   "batch_size": 2,

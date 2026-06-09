@@ -38,7 +38,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Tạo `generate/generate_config.json` (xem mẫu ở mục **Cấu hình generate** bên dưới) và điền API key của bạn.
+Sửa `generate/generate_config.json` và `train/train_config.json` — thay `YOUR_API_URL`, `YOUR_API_KEY`, `YOUR_MODEL_NAME` bằng giá trị thật của bạn.
 
 ## Cách chạy nhanh
 
@@ -104,15 +104,15 @@ Cấu trúc JSON:
 {
   "inference_mode": "api",        // "api" hoặc "local"
   "api": {
-    "url": "https://...",
-    "key": "sk-or-...",
-    "model": "qwen/qwen3-vl-30b-a3b-instruct",
+    "url": "YOUR_API_URL",
+    "key": "YOUR_API_KEY",
+    "model": "YOUR_MODEL_NAME",
     "timeout_seconds": 120,
     "reasoning_effort": "none",
     "reasoning_exclude": true
   },
   "local": {
-    "model": "qwen/qwen3-vl-30b-a3b-instruct"
+    "model": "YOUR_MODEL_NAME"
   },
   "common": {
     "embed_model": "sentence-transformers/...",
@@ -142,7 +142,7 @@ File: `train/train_config.json`
 
 ```json
 {
-  "model": "Qwen/Qwen2.5-1.5B-Instruct",
+  "model_name": "YOUR_MODEL_NAME",
   "require_cuda": false,
   "epochs": 3,
   "batch_size": 2,
@@ -158,7 +158,7 @@ File: `train/train_config.json`
 }
 ```
 
-**Output directory tự động thêm tên model:** nếu `model = "Qwen/Qwen2.5-1.5B-Instruct"` → output sẽ là `data/finetuned_lora_Qwen2.5-1.5B-Instruct`
+**Output directory tự động thêm tên model:** nếu `model_name = "Qwen/Qwen2.5-1.5B-Instruct"` → output sẽ là `data/finetuned_lora_Qwen2.5-1.5B-Instruct`
 
 ## `checks.py` là chỗ custom logic
 
